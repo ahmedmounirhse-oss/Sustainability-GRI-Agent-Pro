@@ -18,25 +18,25 @@ class SustainabilityAgent:
     Advanced Sustainability AI Agent:
     - Handles KPI analysis (energy, water, emissions, waste)
     - Provides GRI-aligned narratives
-    - Forecasts next-year performance
-    - Answers general GRI knowledge questions
+    - Answers general questions about GRI standards
     - Answers personal/meta questions (“Who are you?”)
+    - Supports forecasting for next year
     """
 
     def __init__(self) -> None:
         self._cache: Dict[str, pd.DataFrame] = {}
 
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------
     #                         DATA LOADING
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------
     def _get_data(self, indicator_key: IndicatorKey) -> pd.DataFrame:
         if indicator_key not in self._cache:
             self._cache[indicator_key] = load_indicator(indicator_key)
         return self._cache[indicator_key]
 
-    # --------------------------------------------------------------------
-    #                    SMART INDICATOR DETECTION
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------
+    #                  SMART INDICATOR DETECTION
+    # --------------------------------------------------------------
     @staticmethod
     def _detect_indicator(query: str):
         q = query.lower()
@@ -45,60 +45,61 @@ class SustainabilityAgent:
             return "energy"
         if any(x in q for x in ["water", "303"]):
             return "water"
-        if any(x in q for x in ["emission", "emissions", "co2", "carbon", "ghg", "305"]):
+        if any(x in q for x in ["emission", "co2", "carbon", "ghg", "305"]):
             return "emissions"
         if any(x in q for x in ["waste", "306"]):
             return "waste"
 
-        return None   # means general question
+        return None
 
-    # --------------------------------------------------------------------
-    #                        DETECT YEARS
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------
+    #                         YEAR DETECTION
+    # --------------------------------------------------------------
     @staticmethod
     def _detect_years(query: str, df: pd.DataFrame) -> List[int]:
         years_found = [int(y) for y in re.findall(r"\b(20[0-9]{2})\b", query)]
         if years_found:
             return years_found
 
-        # default: latest available year
         return [int(df["Year"].max())]
 
-    # --------------------------------------------------------------------
-    #                           MAIN LOGIC
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------
+    #                         MAIN LOGIC
+    # --------------------------------------------------------------
     def answer(self, query: str) -> str:
 
-        # 1) Detect indicator
         indicator_key = self._detect_indicator(query)
 
-        # CASE A — general GRI or personal question
+        # GENERAL QUESTION (NO INDICATOR)
         if indicator_key is None:
             return generate_sustainability_answer(
-                question=query,
-                kpi_context={"general_question": True}
+                query,
+                {"general_question": True}
             )
 
-        # CASE B — KPI analytical question
         meta = INDICATORS[indicator_key]
         df = self._get_data(indicator_key)
         yearly = compute_yearly_totals(df)
 
-        # 2) Detect years
+        # YEARS
         years_requested = self._detect_years(query, df)
-        years_available = yearly["Year"].tolist()
+        available_years = yearly["Year"].tolist()
 
-        years_valid = [y for y in years_requested if y in years_available]
-
+        years_valid = [y for y in years_requested if y in available_years]
         if not years_valid:
-            raise ValueError(
-                f"No data available for selected years. Available: {years_available}"
-            )
+            raise ValueError(f"Requested years not found. Available: {available_years}")
 
-        # 3) Forecast
-        next_year, prediction = forecast_next_year(yearly)
+        # --------------------------------------------------------------
+        #                         FORECASTING
+        # --------------------------------------------------------------
+        try:
+            next_year, prediction = forecast_next_year(yearly)
+        except Exception:
+            next_year, prediction = None, None
 
-        # 4) Build KPI records
+        # --------------------------------------------------------------
+        #                        KPI PACKAGING
+        # --------------------------------------------------------------
         unit = df["Unit"].iloc[0]
         kpi_records = []
         narratives = {}
@@ -106,24 +107,21 @@ class SustainabilityAgent:
         for year in years_valid:
             row = yearly[yearly["Year"] == year].iloc[0]
 
-            rec = {
+            kpi_records.append({
                 "year": int(year),
                 "total_value": float(row["total_value"]),
                 "change_abs": None if pd.isna(row["change_abs"]) else float(row["change_abs"]),
                 "change_pct": None if pd.isna(row["change_pct"]) else float(row["change_pct"]),
                 "unit": unit,
-            }
-            kpi_records.append(rec)
+            })
 
-            # Narrative for each year
             narratives[year] = build_indicator_narrative(
-                indicator_key,
-                df,
-                year,
-                unit_label=unit,
+                indicator_key, df, year, unit_label=unit
             )
 
-        # 5) Build full KPI context for LLM
+        # --------------------------------------------------------------
+        #                        LLM CONTEXT
+        # --------------------------------------------------------------
         kpi_context = {
             "indicator_key": indicator_key,
             "indicator_name": meta.kpi_name,
@@ -134,31 +132,37 @@ class SustainabilityAgent:
             "base_narratives": narratives,
             "forecast": {
                 "next_year": next_year,
-                "predicted_value": prediction,
-            },
+                "predicted_value": float(prediction) if prediction else None
+            }
         }
 
-        # 6) Ask LLM
+        # --------------------------------------------------------------
+        #                        LLM ANSWER
+        # --------------------------------------------------------------
         try:
             return generate_sustainability_answer(query, kpi_context)
 
         except Exception as exc:
-            # Fallback (No LLM)
-            fallback = [f"KPI ANALYSIS — {meta.kpi_name} ({meta.gri_code})", ""]
+            # ------------------- FALLBACK -----------------------
+            fb = []
+
+            fb.append(f"Indicator: {meta.kpi_name} ({meta.gri_code})")
+            fb.append(f"Unit: {unit}\n")
 
             for rec in kpi_records:
-                change_abs = "n/a" if rec["change_abs"] is None else f"{rec['change_abs']:.2f} {unit}"
-                change_pct = "n/a" if rec["change_pct"] is None else f"{rec['change_pct']:.2f}%"
+                abs_change = "n/a" if rec["change_abs"] is None else f"{rec['change_abs']:,.2f} {unit}"
+                pct_change = "n/a" if rec["change_pct"] is None else f"{rec['change_pct']:.2f}%"
 
-                fallback.append(
-                    f"Year {rec['year']}: total {rec['total_value']:.2f} {unit} "
-                    f"(change: {change_abs}, {change_pct})"
+                fb.append(
+                    f"Year {rec['year']}: {rec['total_value']:,.2f} {unit} "
+                    f"(change: {abs_change}, {pct_change})"
                 )
-                fallback.append(narratives[rec["year"]])
-                fallback.append("")
+                fb.append(narratives[rec["year"]])
+                fb.append("")
 
-            fallback.append(
-                f"Forecast → {next_year}: {prediction:.2f} {unit}"
-            )
+            if next_year and prediction:
+                fb.append(f"Forecast for {next_year}: {prediction:,.2f} {unit}")
 
-            return "\n".join(fallback) + f"\n\n[LLM ERROR: {exc}]"
+            fb.append(f"\n[LLM Error: {exc}]")
+
+            return "\n".join(fb)
