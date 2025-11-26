@@ -82,10 +82,11 @@ Your responsibilities:
 
     # ------------------- LLM CALL -------------------
     completion = client.chat.completions.create(
-        model="llama-3.2-90b-vision-preview",   # Updated compatible model
-        messages=messages,
-        temperature=0.2,
-        max_tokens=800,
-    )
+    model="llama-3.3-70b-versatile",
+    messages=messages,
+    temperature=0.2,
+    max_tokens=800,
+)
+
 
     return completion.choices[0].message.content.strip()
