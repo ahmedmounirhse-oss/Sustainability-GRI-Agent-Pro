@@ -1,0 +1,10 @@
+streamlit
+pandas
+openpyxl
+reportlab
+matplotlib
+numpy
+groq
+python-dotenv
+scikit-learn
+matplotlib
