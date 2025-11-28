@@ -63,7 +63,8 @@ team_members = [
 "Wasfy Ead Elsaeed Metouly",
 "Mohamed ElSayed Menshawy",
 "Mohamed Salah Abd Elsalam",
-"Mostafa Hussien"
+"Mostafa Hussien",
+Abdelrhman Alaa ElDien Mohamed
 ]
 
 st.markdown("""
@@ -166,3 +167,4 @@ st.markdown("""
 Developed by Sustainability Team | Powered by Streamlit & Groq LLM
 </p>
 """, unsafe_allow_html=True)
+
