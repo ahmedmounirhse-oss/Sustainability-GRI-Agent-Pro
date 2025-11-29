@@ -115,6 +115,9 @@ try:
     st.info(narrative)
 except Exception as e:
     st.error(f"Error generating narrative: {e}")
+
+
+# ---------- FILE UPLOAD ----------
 st.sidebar.subheader("Upload New Data File")
 
 uploaded_file = st.sidebar.file_uploader(
@@ -128,7 +131,4 @@ if uploaded_file is not None:
         f.write(uploaded_file.getbuffer())
 
     st.sidebar.success(f"File uploaded and saved as: {uploaded_file.name}")
-
-    # Force reloading cache of the agent (auto-refresh data)
-    agent = SustainabilityAgent()  # reinitialize agent cache
     st.sidebar.info("Data reloaded successfully! Dashboard updated.")
