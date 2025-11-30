@@ -2,30 +2,28 @@ import os
 import smtplib
 from email.message import EmailMessage
 from datetime import datetime
-
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 
 
-def generate_pdf():
-    buffer_path = "monthly_gri_report.pdf"
+def generate_monthly_pdf():
+    now = datetime.utcnow().strftime("%Y-%m-%d  %H:%M UTC")
+    pdf_file = "GRI_Monthly_Report.pdf"
 
-    doc = SimpleDocTemplate(buffer_path, pagesize=A4)
+    doc = SimpleDocTemplate(pdf_file, pagesize=A4)
     styles = getSampleStyleSheet()
-    story = []
 
-    now = datetime.utcnow().strftime("%Y-%m-%d   %H:%M UTC")
-
-    story.append(Paragraph("<b>Monthly Sustainability GRI Report</b>", styles["Title"]))
-    story.append(Paragraph(f"Generated automatically at {now}", styles["Normal"]))
+    story = [
+        Paragraph("<b>Monthly Sustainability GRI Report</b>", styles["Title"]),
+        Paragraph(f"Generated automatically at: {now}", styles["Normal"])
+    ]
 
     doc.build(story)
+    return pdf_file
 
-    return buffer_path
 
-
-def send_email_with_attachment(pdf_path):
+def send_email(pdf_path):
     host = os.getenv("SMTP_HOST")
     port = int(os.getenv("SMTP_PORT"))
     user = os.getenv("SMTP_USER")
@@ -34,20 +32,13 @@ def send_email_with_attachment(pdf_path):
     email_to = os.getenv("EMAIL_TO")
 
     msg = EmailMessage()
-    msg["Subject"] = "Monthly Sustainability GRI Report"
+    msg["Subject"] = "Monthly GRI Sustainability Report"
     msg["From"] = email_from
     msg["To"] = email_to
-    msg.set_content("Please find the monthly GRI report attached.")
+    msg.set_content("Please find the automated monthly GRI sustainability report attached.")
 
     with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
-
-    msg.add_attachment(
-        pdf_bytes,
-        maintype="application",
-        subtype="pdf",
-        filename="GRI_Monthly_Report.pdf"
-    )
+        msg.add_attachment(f.read(), maintype="application", subtype="pdf", filename="GRI_Monthly_Report.pdf")
 
     with smtplib.SMTP_SSL(host, port) as smtp:
         smtp.login(user, password)
@@ -57,5 +48,5 @@ def send_email_with_attachment(pdf_path):
 
 
 if __name__ == "__main__":
-    pdf_path = generate_pdf()
-    send_email_with_attachment(pdf_path)
+    pdf = generate_monthly_pdf()
+    send_email(pdf)

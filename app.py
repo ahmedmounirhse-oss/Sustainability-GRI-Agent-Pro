@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 from src.ai_agent import SustainabilityAgent
 
 
@@ -34,7 +34,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-=======
+
 from src.ai_agent import SustainabilityAgent
 
 
@@ -70,4 +70,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
->>>>>>> 8f60bd25 (initial commit)
+
