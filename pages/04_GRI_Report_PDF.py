@@ -9,6 +9,10 @@ from reportlab.pdfgen import canvas
 from src.ai_agent.agent import SustainabilityAgentPro
 from src.ai_agent.kpi_service import compute_yearly_totals, forecast_next_year
 from src.ai_agent.reporting import build_indicator_narrative
+import os
+import streamlit as st
+
+st.write("Logo exists:", os.path.exists("assets/company_logo.png"))
 
 
 # ----------------------------------------
