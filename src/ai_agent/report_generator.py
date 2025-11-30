@@ -3,6 +3,10 @@ from typing import List, Dict
 
 import pandas as pd
 import numpy as np
+
+# ==== IMPORTANT FOR STREAMLIT (Fix blank pages / crashes) ====
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from reportlab.lib import colors
@@ -10,20 +14,22 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
+    SimpleDocTemplate, Paragraph, Spacer, Table,
+    TableStyle, PageBreak, Image
 )
 
+# === FIXED IMPORT PATHS ===
 from .config import INDICATORS
 from .data_loader import load_indicator
 from .kpi_service import compute_yearly_totals, forecast_next_year
 from .reporting import build_indicator_narrative
 
 
-# --------------------------- LOGO PATH ----------------------------
+# ========================= STATIC ASSETS ==========================
 LOCAL_LOGO_PATH = "assets/company_logo.png"
 
 
-# ---------------------- CHART GENERATOR --------------------------
+# ======================== PLOT FUNCTION ===========================
 def _plot_yearly_trend(yearly_df, title: str, unit: str) -> BytesIO:
     buf = BytesIO()
 
@@ -43,7 +49,7 @@ def _plot_yearly_trend(yearly_df, title: str, unit: str) -> BytesIO:
     return buf
 
 
-# -------------------- NUMBER FORMATTER ---------------------------
+# ======================== HELPERS ================================
 def _format_num(x):
     try:
         return f"{x:,.2f}"
@@ -51,18 +57,15 @@ def _format_num(x):
         return str(x)
 
 
-# -------------------- OUTLOOK BUILDER ----------------------------
 def _build_outlook_text(predicted_value: float, unit: str, next_year: int) -> str:
     return (
         f"The projected performance for <b>{next_year}</b> is estimated at "
         f"<b>{_format_num(predicted_value)} {unit}</b>. "
-        f"This outlook reflects current operational patterns, historical trends, "
-        f"and expected conditions influencing future performance. Resources will be "
-        f"managed proactively to improve efficiency and reduce environmental impact."
+        f"This outlook reflects historical patterns and expected conditions."
     )
 
 
-# ---------------------- MAIN REPORT BUILDER ----------------------
+# ========================= MAIN REPORT ============================
 def build_gri_pdf_report(year: int) -> BytesIO:
     buffer = BytesIO()
 
@@ -83,7 +86,7 @@ def build_gri_pdf_report(year: int) -> BytesIO:
 
     story = []
 
-    # ============================ COVER PAGE ================================
+    # ===================== COVER PAGE ======================
     try:
         logo = Image(LOCAL_LOGO_PATH, width=6 * cm, height=6 * cm)
         logo.hAlign = "CENTER"
@@ -96,7 +99,7 @@ def build_gri_pdf_report(year: int) -> BytesIO:
     story.append(Paragraph(f"Reporting Year: <b>{year}</b>", styles["Heading3"]))
     story.append(PageBreak())
 
-    # ========================== EXECUTIVE SUMMARY ===========================
+    # ================= EXECUTIVE SUMMARY ===================
     story.append(Paragraph("Executive Summary", styles["SectionHeader"]))
 
     exec_lines = []
@@ -114,21 +117,36 @@ def build_gri_pdf_report(year: int) -> BytesIO:
         pct = r["change_pct"]
 
         if pd.isna(pct):
-            trend_word = "stable performance"
+            trend = "stable performance"
         elif pct > 0:
-            trend_word = f"increased by {pct:.1f}%"
+            trend = f"increased by {pct:.1f}%"
         else:
-            trend_word = f"decreased by {abs(pct):.1f}%"
+            trend = f"decreased by {abs(pct):.1f}%"
 
         exec_lines.append(
-            f"- {meta.kpi_name} ({meta.gri_code}): "
-            f"{_format_num(total)} {df['Unit'].iloc[0]} ({trend_word})."
+            f"- {meta.kpi_name} ({meta.gri_code}): {_format_num(total)} "
+            f"{df['Unit'].iloc[0]} ({trend})."
         )
 
     story.append(Paragraph("<br/>".join(exec_lines), styles["NormalSmall"]))
     story.append(PageBreak())
 
-    # ========================== INDICATOR SECTIONS ==========================
+    # ================== INDICATOR SECTIONS =================
+    MONTH_MAP = {
+        "jan": 1, "january": 1,
+        "feb": 2, "february": 2,
+        "mar": 3, "march": 3,
+        "apr": 4, "april": 4,
+        "may": 5,
+        "jun": 6, "june": 6,
+        "jul": 7, "july": 7,
+        "aug": 8, "august": 8,
+        "sep": 9, "september": 9,
+        "oct": 10, "october": 10,
+        "nov": 11, "november": 11,
+        "dec": 12, "december": 12,
+    }
+
     for key, meta in INDICATORS.items():
 
         df = load_indicator(key)
@@ -149,7 +167,7 @@ def build_gri_pdf_report(year: int) -> BytesIO:
         total = r["total_value"]
         unit = df["Unit"].iloc[0]
 
-        # -------- KPI TABLE --------
+        # ===== KPI TABLE =====
         kpi_data = [
             ["Metric", "Value"],
             ["Total", f"{_format_num(total)} {unit}"],
@@ -162,50 +180,40 @@ def build_gri_pdf_report(year: int) -> BytesIO:
             TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey)
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
             ])
         )
         story.append(table)
         story.append(Spacer(1, 0.3 * cm))
 
-        # -------- TREND CHART --------
+        # ===== TREND CHART =====
         chart = _plot_yearly_trend(yearly, meta.kpi_name, unit)
         story.append(Image(chart, width=15 * cm, height=4 * cm))
         story.append(Spacer(1, 0.3 * cm))
 
-        # -------- NARRATIVE --------
+        # ===== NARRATIVE =====
         narrative = build_indicator_narrative(key, df, year, unit_label=unit)
         story.append(Paragraph("<b>Narrative</b>", styles["Normal"]))
         story.append(Paragraph(narrative, styles["NormalSmall"]))
         story.append(Spacer(1, 0.4 * cm))
 
-        # -------- OUTLOOK --------
+        # ===== OUTLOOK =====
         next_year, prediction = forecast_next_year(yearly)
         outlook = _build_outlook_text(prediction, unit, next_year)
 
         story.append(Paragraph("<b>Outlook</b>", styles["Normal"]))
         story.append(Paragraph(outlook, styles["NormalSmall"]))
-        story.append(Spacer(1, 0.5 * cm))
+        story.append(Spacer(1, 0.4 * cm))
 
-        # -------- MONTHLY TABLE (SORTED) --------
+        # ===== MONTHLY TABLE =====
         monthly = df[df["Year"] == year].copy()
-
         if not monthly.empty:
 
-            # Normalize and convert month names → numbers
-            month_map = {
-                "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-                "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
-            }
+            def _conv(m):
+                m = str(m).strip().lower()
+                return MONTH_MAP.get(m, int(m))
 
-            monthly["Month"] = (
-                monthly["Month"]
-                .astype(str)
-                .str.strip()
-                .str.lower()
-                .apply(lambda x: month_map[x] if x in month_map else int(x))
-            )
-
+            monthly["Month"] = monthly["Month"].apply(_conv)
             monthly = monthly.sort_values("Month")
 
             mon_data = [["Month", "Value", "Unit"]]
@@ -229,7 +237,7 @@ def build_gri_pdf_report(year: int) -> BytesIO:
 
         story.append(PageBreak())
 
-    # =============================== APPENDIX ==============================
+    # ===================== APPENDIX =========================
     story.append(Paragraph("Appendix — Annual Raw Data", styles["SectionHeader"]))
 
     for key, meta in INDICATORS.items():
@@ -251,14 +259,12 @@ def build_gri_pdf_report(year: int) -> BytesIO:
         story.append(table)
         story.append(Spacer(1, 0.5 * cm))
 
-    # =========================== FINISH DOCUMENT ===========================
     doc.build(story)
     buffer.seek(0)
-
     return buffer
 
 
-# ---------------------- AVAILABLE YEARS --------------------------
+# ================= AVAILABLE YEARS ======================
 def get_available_years_for_reports() -> List[int]:
     years = set()
     for key in INDICATORS.keys():
