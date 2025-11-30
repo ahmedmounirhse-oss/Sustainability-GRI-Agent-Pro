@@ -98,8 +98,8 @@ if enable_autorefresh:
         # re-scan and reload
         if detect_file_changes():
             agent._cache = {}
-        st.experimental_rerun()
-else:
+        st.rerun()
+
     # still detect file changes once per page load
     if detect_file_changes():
         agent._cache = {}
