@@ -3,7 +3,6 @@ venv/
 data/
 output/
 __pycache__/
-*.xlsx
 *.pdf
 *.png
 *.jpg
