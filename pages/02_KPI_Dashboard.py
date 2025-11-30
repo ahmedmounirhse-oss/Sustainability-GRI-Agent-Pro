@@ -35,6 +35,63 @@ agent: SustainabilityAgentPro = st.session_state.agent
 # DATA AUTO-RELOAD / WATCHER
 # -------------------------
 DATA_DIR = Path("data")
+# DATA AUTO-RELOAD / WATCHER
+# -------------------------
+DATA_DIR = Path("data")
+
+# ------------------------------------------
+# AUTO LIVE FILE WATCHER — FINAL VERSION
+# ------------------------------------------
+if "file_state" not in st.session_state:
+    st.session_state.file_state = {}
+
+def snapshot_files():
+    """
+    Returns {filepath: last_modified_timestamp}
+    """
+    snap = {}
+    for f in DATA_DIR.glob("*.xlsx"):
+        try:
+            snap[str(f)] = os.path.getmtime(f)
+        except FileNotFoundError:
+            continue
+    return snap
+
+def has_file_changes(old, new):
+    """
+    Detect if ANY change happened:
+    - new file
+    - deleted file
+    - modified file
+    """
+    if old.keys() != new.keys():
+        return True
+
+    for f, ts in new.items():
+        if f not in old or old[f] != ts:
+            return True
+
+    return False
+
+def force_reload():
+    """Fully reset Streamlit state & reload."""
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    if hasattr(agent, "_cache"):
+        agent._cache = {}
+    try:
+        st.rerun()
+    except:
+        pass
+
+# AUTO LIVE CHECK
+new_snapshot = snapshot_files()
+old_snapshot = st.session_state.file_state
+
+if has_file_changes(old_snapshot, new_snapshot):
+    st.session_state.file_state = new_snapshot
+    st.toast("🔄 Data changed — auto reloading...", icon="🔁")
+    force_reload()
 
 if "file_timestamps" not in st.session_state:
     st.session_state.file_timestamps = {}
