@@ -11,3 +11,4 @@ openpyxl
 pillow
 requests
 python-dotenv
+scikit-learn
