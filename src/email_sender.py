@@ -1,61 +1,24 @@
-import os
 import smtplib
 from email.message import EmailMessage
-from datetime import datetime
+import os
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import A4
+EMAIL = os.getenv("EMAIL_ADDRESS")
+PASS = os.getenv("EMAIL_PASSWORD")
 
-
-def generate_pdf():
-    buffer_path = "monthly_gri_report.pdf"
-
-    doc = SimpleDocTemplate(buffer_path, pagesize=A4)
-    styles = getSampleStyleSheet()
-    story = []
-
-    now = datetime.utcnow().strftime("%Y-%m-%d   %H:%M UTC")
-
-    story.append(Paragraph("<b>Monthly Sustainability GRI Report</b>", styles["Title"]))
-    story.append(Paragraph(f"Generated automatically at {now}", styles["Normal"]))
-
-    doc.build(story)
-
-    return buffer_path
-
-
-def send_email_with_attachment(pdf_path):
-    host = os.getenv("SMTP_HOST")
-    port = int(os.getenv("SMTP_PORT"))
-    user = os.getenv("SMTP_USER")
-    password = os.getenv("SMTP_PASS")
-    email_from = os.getenv("EMAIL_FROM")
-    email_to = os.getenv("EMAIL_TO")
-
+def send_pdf_via_email(receiver_email, pdf_bytes, pdf_name, year):
     msg = EmailMessage()
-    msg["Subject"] = "Monthly Sustainability GRI Report"
-    msg["From"] = email_from
-    msg["To"] = email_to
-    msg.set_content("Please find the monthly GRI report attached.")
-
-    with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
+    msg["Subject"] = f"EGY-WOOD GRI Sustainability Report {year}"
+    msg["From"] = EMAIL
+    msg["To"] = receiver_email
+    msg.set_content("Please find the attached GRI Sustainability Report.")
 
     msg.add_attachment(
         pdf_bytes,
         maintype="application",
         subtype="pdf",
-        filename="GRI_Monthly_Report.pdf"
+        filename=pdf_name
     )
 
-    with smtplib.SMTP_SSL(host, port) as smtp:
-        smtp.login(user, password)
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(EMAIL, PASS)
         smtp.send_message(msg)
-
-    print("Email sent successfully.")
-
-
-if __name__ == "__main__":
-    pdf_path = generate_pdf()
-    send_email_with_attachment(pdf_path)
