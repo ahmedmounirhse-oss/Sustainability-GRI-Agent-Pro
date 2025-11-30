@@ -87,7 +87,11 @@ if refresh_button:
     agent._cache = {}
     st.session_state.file_timestamps = {}
     st.success("Cache cleared — data will reload on demand.")
-    st.experimental_rerun()
+try:
+    st.rerun()
+except:
+    pass
+
 
 # Auto-refresh logic
 if enable_autorefresh:
