@@ -12,3 +12,4 @@ pillow
 requests
 python-dotenv
 scikit-learn
+groq
