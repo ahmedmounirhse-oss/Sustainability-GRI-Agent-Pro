@@ -89,7 +89,10 @@ except:
 
 available_years = sorted(yearly["Year"].unique())
 selected_years = parse_years(years_text, available_years)
-yearly_sel = yearly[yearly["Year"].isin(selected_years)] or yearly.copy()
+yearly_sel = yearly[yearly["Year"].isin(selected_years)]
+if yearly_sel.empty:
+    yearly_sel = yearly.copy()
+
 
 unit_label = df["Unit"].iloc[0] if "Unit" in df.columns else ""
 
