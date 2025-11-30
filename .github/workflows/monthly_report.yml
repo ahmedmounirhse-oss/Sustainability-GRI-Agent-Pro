@@ -3,28 +3,28 @@ name: Monthly GRI Report
 
 on:
   schedule:
-    # Run at 02:00 UTC on the 1st of each month
-    - cron: '0 2 1 * *'
-  workflow_dispatch:
+    - cron: '0 6 1 * *'   # 06:00 UTC on the 1st of each month
+  workflow_dispatch:       # allow manual trigger
 
 jobs:
   build-and-send:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Requirements
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run monthly report script
+      - name: Run Monthly GRI Report Sender
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -32,6 +32,5 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          REPORT_LOGO: ${{ secrets.REPORT_LOGO }}  # optional path if you add logo to repo
         run: |
           python scripts/send_monthly_report.py
