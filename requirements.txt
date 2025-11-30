@@ -1,0 +1,23 @@
+<<<<<<< HEAD
+streamlit
+pandas
+openpyxl
+reportlab
+matplotlib
+numpy
+groq
+python-dotenv
+scikit-learn
+matplotlib
+=======
+streamlit
+pandas
+openpyxl
+reportlab
+matplotlib
+numpy
+groq
+python-dotenv
+scikit-learn
+matplotlib
+>>>>>>> 8f60bd25 (initial commit)
