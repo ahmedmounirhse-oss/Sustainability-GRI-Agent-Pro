@@ -2,8 +2,8 @@ import smtplib
 from email.message import EmailMessage
 import os
 
-EMAIL = os.getenv("EMAIL_ADDRESS")
-PASS = os.getenv("EMAIL_PASSWORD")
+EMAIL ="ahmed.mounir.hse@gmail.com" 
+PASS ="gjqmoixtzthrqgke" 
 
 def send_pdf_via_email(receiver_email, pdf_bytes, pdf_name, year):
     msg = EmailMessage()

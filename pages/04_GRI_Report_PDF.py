@@ -3,12 +3,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import json
-import io
 from datetime import datetime, timedelta
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -33,6 +31,15 @@ os.makedirs(OUT_DIR, exist_ok=True)
 EMAIL = os.getenv("EMAIL_ADDRESS")
 PASS = os.getenv("EMAIL_PASSWORD")
 AUTO_FILE = "auto_gri_email.json"
+
+# ----------------------------------------
+# SESSION STATE (FIX FOR RESSETS)
+# ----------------------------------------
+if "pdf_bytes" not in st.session_state:
+    st.session_state.pdf_bytes = None
+
+if "pdf_name" not in st.session_state:
+    st.session_state.pdf_name = None
 
 # ----------------------------------------
 # AGENT INIT
@@ -90,16 +97,17 @@ except:
 available_years = sorted(yearly["Year"].unique())
 selected_years = parse_years(years_text, available_years)
 yearly_sel = yearly[yearly["Year"].isin(selected_years)]
+
 if yearly_sel.empty:
     yearly_sel = yearly.copy()
-
 
 unit_label = df["Unit"].iloc[0] if "Unit" in df.columns else ""
 
 # ----------------------------------------
-# PLOT HELPERS
+# PLOTS
 # ----------------------------------------
 def plot_trend(yearly_df, indicator_label, out_path):
+    import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(8, 3.6))
     ax.plot(yearly_df["Year"], yearly_df["total_value"], marker="o")
     ax.set_title(f"{indicator_label} — Yearly Trend")
@@ -126,7 +134,7 @@ def plot_monthly(df_all, year, indicator_label, out_path):
     return out_path
 
 # ----------------------------------------
-# PDF BUILDER
+# PDF GENERATOR
 # ----------------------------------------
 def build_pdf(indicator_key, yearly_df, df_all, out_pdf):
 
@@ -156,19 +164,20 @@ def build_pdf(indicator_key, yearly_df, df_all, out_pdf):
     c = canvas.Canvas(out_pdf, pagesize=A4)
     w, h = A4
 
-    # COVER
+    # COVER PAGE
     c.setFont("Helvetica-Bold", 20)
     c.drawCentredString(w/2, h-60, f"EGY-WOOD — GRI Report")
+
     c.setFont("Helvetica", 14)
     c.drawCentredString(w/2, h-85, f"Indicator: {indicator_label}")
-    c.drawCentredString(w/2, h-105, f"Generated on: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+    c.drawCentredString(w/2, h-105, f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
 
     if os.path.exists(logo_path):
         c.drawImage(logo_path, w-150, h-160, width=100, height=100)
 
     c.showPage()
 
-    # TREND
+    # YEARLY TREND
     c.setFont("Helvetica-Bold", 16)
     c.drawString(40, h-60, "Yearly Trend")
     c.drawImage(trend_img, 40, h-420, width=520, height=300)
@@ -186,16 +195,17 @@ def build_pdf(indicator_key, yearly_df, df_all, out_pdf):
         c.setFont("Helvetica-Bold", 16)
         c.drawString(40, h-60, "Forecast")
         c.setFont("Helvetica", 12)
-        c.drawString(40, h-90, f"Forecast Year: {fy}")
-        c.drawString(40, h-110, f"Expected Value: {fv:.2f} {unit_label}")
+        c.drawString(40, h-90, f"Next Year: {fy}")
+        c.drawString(40, h-110, f"Expected: {fv:.2f} {unit_label}")
         c.showPage()
 
     # ANOMALIES
     if include_anomalies:
         c.setFont("Helvetica-Bold", 16)
-        c.drawString(40, h-60, "Anomalies Detected")
+        c.drawString(40, h-60, "Anomalies")
         c.setFont("Helvetica", 12)
         y = h-100
+
         for _, row in yearly_df.iterrows():
             if row["anomaly"]:
                 c.drawString(40, y, f"{int(row['Year'])}: {row['total_value']:.2f} {unit_label}")
@@ -224,14 +234,10 @@ def build_pdf(indicator_key, yearly_df, df_all, out_pdf):
     return out_pdf
 
 # ----------------------------------------
-# PDF GENERATE BUTTON
+# PDF GENERATE
 # ----------------------------------------
 st.write("---")
 st.subheader("Build Full Report")
-
-pdf_bytes = None
-pdf_path = None
-pdf_name = None
 
 if st.button("Generate Full GRI PDF"):
     now = datetime.utcnow().strftime("%Y%m%d_%H%M")
@@ -241,38 +247,38 @@ if st.button("Generate Full GRI PDF"):
     build_pdf(indicator, yearly_sel, df, pdf_path)
 
     with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
+        st.session_state.pdf_bytes = f.read()
+
+    st.session_state.pdf_name = pdf_name
 
     st.success("PDF Generated Successfully!")
-    st.download_button("📥 Download Report", pdf_bytes, file_name=pdf_name)
+    st.download_button("📥 Download Report", st.session_state.pdf_bytes, file_name=pdf_name)
 
-# ===========================================================
-#               📧 EMAIL SENDING (MANUAL)
-# ===========================================================
-
-st.markdown("---")
+# ----------------------------------------
+# EMAIL SEND (MANUAL)
+# ----------------------------------------
+st.write("---")
 st.subheader("📧 Send GRI Report by Email")
 
-email_to = st.text_input("Recipient Email", "example@example.com")
+email_to = st.text_input("Recipient Email", "")
 
 if st.button("📤 Send GRI Report Now"):
-    if pdf_bytes is None:
+    if st.session_state.pdf_bytes is None:
         st.error("Please generate the PDF first.")
     else:
         if send_pdf_via_email(
             receiver_email=email_to,
-            pdf_bytes=pdf_bytes,
-            pdf_name=pdf_name or "GRI_Report.pdf",
-            year=datetime.utcnow().year
+            pdf_bytes=st.session_state.pdf_bytes,
+            pdf_name=st.session_state.pdf_name,
+            year=datetime.utcnow().year,
         ):
             st.success("Email sent successfully!")
         else:
             st.error("Email sending failed.")
 
-# ===========================================================
-#               ⏱ AUTO MONTHLY EMAIL
-# ===========================================================
-
+# ----------------------------------------
+# AUTO MONTHLY EMAIL
+# ----------------------------------------
 st.write("---")
 st.subheader("⏱ Auto Monthly Email")
 
@@ -296,22 +302,19 @@ def check_auto_send(to_email):
 
     if now >= next_time:
 
-        # Generate PDF automatically
         now_str = datetime.utcnow().strftime("%Y%m%d_%H%M")
         pdf_name = f"EGY-WOOD_GRI_Report_{now_str}.pdf"
         pdf_path = os.path.join(OUT_DIR, pdf_name)
 
         build_pdf(indicator, yearly_sel, df, pdf_path)
-
         with open(pdf_path, "rb") as f:
             pdf_bytes = f.read()
 
-        # Send Email
         if send_pdf_via_email(
             receiver_email=to_email,
             pdf_bytes=pdf_bytes,
             pdf_name=pdf_name,
-            year=datetime.utcnow().year
+            year=datetime.utcnow().year,
         ):
             st.toast("📨 Auto GRI Report Sent!")
 
@@ -340,5 +343,8 @@ if auto_data["enabled"]:
 else:
     st.info("Auto Email Disabled")
 
-# RUN AUTO CHECK
-check_auto_send(email_to)
+# ----------------------------------------
+# AUTO SEND EXECUTION
+# ----------------------------------------
+if email_to and email_to.strip() and "@" in email_to:
+    check_auto_send(email_to)
