@@ -1,34 +1,37 @@
-name: Monthly Auto GRI Report
+# .github/workflows/monthly_report.yml
+name: Monthly GRI Report
 
 on:
   schedule:
-    - cron: "0 7 1 * *"   # ⏰ Runs 7:00 AM on the 1st of every month (Cairo time)
-  workflow_dispatch:       # manual run
+    # Run at 02:00 UTC on the 1st of each month
+    - cron: '0 2 1 * *'
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-and-send:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Run monthly report job
-      env:
-        SMTP_HOST: ${{ secrets.SMTP_HOST }}
-        SMTP_PORT: ${{ secrets.SMTP_PORT }}
-        SMTP_USER: ${{ secrets.SMTP_USER }}
-        SMTP_PASS: ${{ secrets.SMTP_PASS }}
-        EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-        EMAIL_TO: ${{ secrets.EMAIL_TO }}
-      run: |
-        python scripts/generate_and_email.py
+      - name: Run monthly report script
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          REPORT_LOGO: ${{ secrets.REPORT_LOGO }}  # optional path if you add logo to repo
+        run: |
+          python scripts/send_monthly_report.py

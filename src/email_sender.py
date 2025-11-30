@@ -1,91 +1,66 @@
 # src/email_sender.py
-
 import os
-from dotenv import load_dotenv
+import time
 import smtplib
 from email.message import EmailMessage
 from typing import Optional
 
-# Force-load .env regardless of Streamlit load order
-root_dir = os.path.dirname(os.path.dirname(__file__))
-env_path = os.path.join(root_dir, ".env")
-load_dotenv(dotenv_path=env_path)
-
-
-def get_email_settings():
-    """
-    Load email configuration safely.
-    This avoids raising errors during module import.
-    """
-    EMAIL_SENDER = os.getenv("ahmed.mounir.hse@gmail.com")
-    EMAIL_PASSWORD = os.getenv("zoltdyghqfbggqyg")
-    SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-
-    if not EMAIL_SENDER or not EMAIL_PASSWORD:
-        # Try fallback local config
-        try:
-            from .email_config import EMAIL_SENDER as fallback_sender
-            from .email_config import EMAIL_PASSWORD as fallback_pass
-            from .email_config import SMTP_SERVER as fallback_srv
-            from .email_config import SMTP_PORT as fallback_port
-            return fallback_sender, fallback_pass, fallback_srv, fallback_port
-        except:
-            # Do NOT raise error here → keep it for send function
-            return None, None, None, None
-
-    return EMAIL_SENDER, EMAIL_PASSWORD, SMTP_SERVER, SMTP_PORT
-
-
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASS = os.getenv("SMTP_PASS")
+EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER)
 
 def send_pdf_via_email(
     receiver_email: str,
     pdf_bytes: bytes,
     pdf_name: str,
-    year: int,
-    cc: Optional[str] = None,
-    bcc: Optional[str] = None,
-) -> bool:
+    subject: Optional[str] = None,
+    body: Optional[str] = None,
+    smtp_host: Optional[str] = None,
+    smtp_port: Optional[int] = None,
+    smtp_user: Optional[str] = None,
+    smtp_pass: Optional[str] = None,
+    sender: Optional[str] = None,
+    retries: int = 2,
+    retry_delay: int = 5,
+):
+    """
+    Send PDF bytes to a single receiver. Use env vars as defaults.
+    Raises exception on permanent failure.
+    """
+    smtp_host = smtp_host or SMTP_HOST
+    smtp_port = smtp_port or SMTP_PORT
+    smtp_user = smtp_user or SMTP_USER
+    smtp_pass = smtp_pass or SMTP_PASS
+    sender = sender or EMAIL_FROM
 
-    EMAIL_SENDER, EMAIL_PASSWORD, SMTP_SERVER, SMTP_PORT = get_email_settings()
+    if subject is None:
+        subject = f"GRI Sustainability Report — {pdf_name}"
+    if body is None:
+        body = f"Attached: {pdf_name}"
 
-    if not EMAIL_SENDER or not EMAIL_PASSWORD:
-        raise RuntimeError("Email sender or password not configured.")
+    if not smtp_host or not smtp_user or not smtp_pass:
+        raise RuntimeError("SMTP configuration missing. Set SMTP_HOST/SMTP_USER/SMTP_PASS in environment.")
 
-    # Build message
     msg = EmailMessage()
-    msg["Subject"] = f"GRI Sustainability Report {year}"
-    msg["From"] = EMAIL_SENDER
+    msg["From"] = sender
     msg["To"] = receiver_email
+    msg["Subject"] = subject
+    msg.set_content(body)
+    msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=pdf_name)
 
-    if cc:
-        msg["Cc"] = cc
-
-    recipients = [receiver_email] + ([cc] if cc else []) + ([bcc] if bcc else [])
-
-    msg.set_content(
-        f"""
-Hello,
-
-Attached is the GRI Sustainability Report for the year {year}.
-
-Best regards,
-Sustainability AI Agent
-"""
-    )
-
-    msg.add_attachment(
-        pdf_bytes,
-        maintype="application",
-        subtype="pdf",
-        filename=pdf_name,
-    )
-
-    # Send via SMTP
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        smtp.send_message(msg, from_addr=EMAIL_SENDER, to_addrs=recipients)
-
-    return True
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=60) as s:
+                s.starttls()
+                s.login(smtp_user, smtp_pass)
+                s.send_message(msg)
+            return True
+        except Exception as e:
+            last_exc = e
+            if attempt < retries:
+                time.sleep(retry_delay)
+                continue
+            raise last_exc
