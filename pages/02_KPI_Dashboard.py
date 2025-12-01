@@ -24,53 +24,56 @@ DATA_DIR = Path("data")
 OUT_DIR = Path("output")
 OUT_DIR.mkdir(exist_ok=True)
 
-# -------------------------
-# Init agent
-# -------------------------
-if "agent" not in st.session_state:
-    st.session_state.agent = SustainabilityAgentPro()
-agent: SustainabilityAgentPro = st.session_state.agent
-
 # ============================================================
-#                AUTO-LIVE-RELOAD ENGINE (Final)
+#                AUTO-LIVE-RELOAD ENGINE (FINAL)
 # ============================================================
 
 if "last_snapshot" not in st.session_state:
     st.session_state.last_snapshot = {}
+if "last_check" not in st.session_state:
+    st.session_state.last_check = 0
 
 def get_snapshot():
     snap = {}
     for f in DATA_DIR.glob("*.xlsx"):
         try:
             snap[str(f)] = os.path.getmtime(f)
-        except FileNotFoundError:
+        except:
             pass
     return snap
 
 def snapshot_changed(old, new):
-    # new or deleted file
     if old.keys() != new.keys():
         return True
-    # modified file
     for f, ts in new.items():
         if f not in old or old[f] != ts:
             return True
     return False
 
-current_snapshot = get_snapshot()
-if snapshot_changed(st.session_state.last_snapshot, current_snapshot):
-    st.session_state.last_snapshot = current_snapshot
-    agent._cache = {}  # clear internal cache
+now = time.time()
+if now - st.session_state.last_check > 3:
+    st.session_state.last_check = now
 
-    st.toast("🔄 Detected data changes — Auto reloading...", icon="🔥")
+    new = get_snapshot()
+    if snapshot_changed(st.session_state.last_snapshot, new):
+        st.session_state.last_snapshot = new
 
-    try:
-        st.rerun()
-    except:
-        pass
+        if "agent" in st.session_state:
+            st.session_state.agent._cache = {}
 
-# Auto periodic refresh every 5 seconds
-st.autorefresh(interval=5000, limit=None, key="auto_update")
+        st.toast("🔄 Data updated — refreshing dashboard...", icon="🔥")
+
+        try:
+            st.rerun()
+        except:
+            pass
+
+# -------------------------
+# Init agent
+# -------------------------
+if "agent" not in st.session_state:
+    st.session_state.agent = SustainabilityAgentPro()
+agent: SustainabilityAgentPro = st.session_state.agent
 
 # ============================================================
 #                  SIDEBAR CONTROLS
@@ -81,7 +84,7 @@ with st.sidebar:
     primary_indicator = st.selectbox("Primary Indicator", ["energy", "water", "emissions", "waste"])
     anomaly_threshold = st.number_input("Anomaly threshold (z-score)", value=3.0, min_value=1.0, max_value=6.0)
 
-    st.write("Detected data files:")
+    st.write("📂 Files detected:")
     files_here = [f.name for f in DATA_DIR.glob("*.xlsx")]
     if files_here:
         for f in files_here:
