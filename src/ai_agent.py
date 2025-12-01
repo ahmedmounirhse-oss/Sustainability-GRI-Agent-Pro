@@ -9,7 +9,6 @@ from .kpi_service import compute_yearly_totals, forecast_next_year
 from .reporting import build_indicator_narrative
 from .llm_engine import generate_sustainability_answer
 
-
 IndicatorKey = Literal["energy", "water", "emissions", "waste"]
 
 
@@ -24,15 +23,14 @@ class SustainabilityAgent:
     """
 
     def __init__(self) -> None:
-        self._cache: Dict[str, pd.DataFrame] = {}
+        pass  # 🔥 no cache anymore
 
     # --------------------------------------------------------------
     #                         DATA LOADING
     # --------------------------------------------------------------
     def _get_data(self, indicator_key: IndicatorKey) -> pd.DataFrame:
-        if indicator_key not in self._cache:
-            self._cache[indicator_key] = load_indicator(indicator_key)
-        return self._cache[indicator_key]
+        # 🔥 always reload from /data/ — no caching
+        return load_indicator(indicator_key)
 
     # --------------------------------------------------------------
     #                  SMART INDICATOR DETECTION
@@ -89,17 +87,13 @@ class SustainabilityAgent:
         if not years_valid:
             raise ValueError(f"Requested years not found. Available: {available_years}")
 
-        # --------------------------------------------------------------
-        #                         FORECASTING
-        # --------------------------------------------------------------
+        # FORECASTING
         try:
             next_year, prediction = forecast_next_year(yearly)
         except Exception:
             next_year, prediction = None, None
 
-        # --------------------------------------------------------------
-        #                        KPI PACKAGING
-        # --------------------------------------------------------------
+        # KPI PACKAGING
         unit = df["Unit"].iloc[0]
         kpi_records = []
         narratives = {}
@@ -119,9 +113,7 @@ class SustainabilityAgent:
                 indicator_key, df, year, unit_label=unit
             )
 
-        # --------------------------------------------------------------
-        #                        LLM CONTEXT
-        # --------------------------------------------------------------
+        # LLM CONTEXT
         kpi_context = {
             "indicator_key": indicator_key,
             "indicator_name": meta.kpi_name,
@@ -136,14 +128,11 @@ class SustainabilityAgent:
             }
         }
 
-        # --------------------------------------------------------------
-        #                        LLM ANSWER
-        # --------------------------------------------------------------
+        # LLM ANSWER
         try:
             return generate_sustainability_answer(query, kpi_context)
 
         except Exception as exc:
-            # ------------------- FALLBACK -----------------------
             fb = []
 
             fb.append(f"Indicator: {meta.kpi_name} ({meta.gri_code})")
